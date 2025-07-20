@@ -1,0 +1,40 @@
+name: Model-CI
+
+on: [push]
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      - uses: iterative/setup-dvc@v1
+      - uses: iterative/setup-cml@v1
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Pull DVC data
+        # Use --force for subsequent runs
+        run: dvc pull --force
+        env:
+          GCS_GDRIVE_CLIENT_ID: ${{ secrets.GCS_GDRIVE_CLIENT_ID }}
+          GCS_GDRIVE_CLIENT_SECRET: ${{ secrets.GCS_GDRIVE_CLIENT_SECRET }}
+          # Add GCS auth secrets if you configured GCS remote
+
+      - name: Run tests
+        run: pytest tests/
+
+      - name: Train model and create CML report
+        run: |
+          # Train on v1 data for the CI report
+          python train.py --version v1
+
+          # Create the CML report
+          echo "## Model v1 Training Report" > report.md
+          echo "Find the generated confusion matrix below." >> report.md
+          cml comment create --publish confusion_matrix.png report.md
+        env:
+          REPO_TOKEN: ${{ secrets.GITHUB_TOKEN }}
